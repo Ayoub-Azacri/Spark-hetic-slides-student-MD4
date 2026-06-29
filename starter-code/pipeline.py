@@ -179,11 +179,30 @@ def nettoyage(df_caract, df_lieux, df_vehicules, df_usagers):
             (F.col("grav") >= 1) & (F.col("grav") <= 4) &
             ((F.col("an_nais") >= 1900) & (F.col("an_nais") <= 2023) | F.col("an_nais").isNull())
     )
+    # -------------------------------------------------------------------------
+        # CALCUL ET AFFICHAGE DES STATISTIQUES DE QUALITÉ DES DONNÉES
+    # -------------------------------------------------------------------------
+    count_caract_brut = df_caract.count()
+    count_caract_clean = df_caract_clean.count()
+    drop_caract = ((count_caract_brut - count_caract_clean) / count_caract_brut) * 100
 
-    print(f"Après nettoyage - caractéristiques: {df_caract_clean.count()}")
-    print(f"Après nettoyage - lieux: {df_lieux_clean.count()}")
-    print(f"Après nettoyage - véhicules: {df_vehicules_clean.count()}")
-    print(f"Après nettoyage - usagers: {df_usagers_clean.count()}")
+    count_lieux_brut = df_lieux.count()
+    count_lieux_clean = df_lieux_clean.count()
+    drop_lieux = ((count_lieux_brut - count_lieux_clean) / count_lieux_brut) * 100
+
+    count_veh_brut = df_vehicules.count()
+    count_veh_clean = df_vehicules_clean.count()
+    drop_veh = ((count_veh_brut - count_veh_clean) / count_veh_brut) * 100
+
+    count_usagers_brut = df_usagers.count()
+    count_usagers_clean = df_usagers_clean.count()
+    drop_usagers = ((count_usagers_brut - count_usagers_clean) / count_usagers_brut) * 100
+
+    print(f"Après nettoyage - caractéristiques: {count_caract_clean} ({drop_caract:.2f}% écartées)")
+    print(f"Après nettoyage - lieux: {count_lieux_clean} ({drop_lieux:.2f}% écartées)")
+    print(f"Après nettoyage - véhicules: {count_veh_clean} ({drop_veh:.2f}% écartées)")
+    print(f"Après nettoyage - usagers: {count_usagers_clean} ({drop_usagers:.2f}% écartées)")
+ # -------------------------------------------------------------------------
 
     return df_caract_clean, df_lieux_clean, df_vehicules_clean, df_usagers_clean
 
