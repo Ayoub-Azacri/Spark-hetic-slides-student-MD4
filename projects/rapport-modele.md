@@ -98,19 +98,35 @@ Utilitaire (VU),8975,990,11.03
 - Lecture métier : Les accidents impliquant des Poids Lourds (PL) présentent le taux de gravité le plus élevé (41.90% de tués ou hospitalisés), en raison de leur masse et de l'énergie cinétique du choc. De même, les usagers de deux-roues (Cyclomoteurs à 37.73%, Vélos à 26.42% et Motos à 26.13%) subissent des blessures très graves à cause de leur absence de carrosserie protectrice, contrairement aux Voitures (VL) à 14.31%.
 
 
-### Analyse 3 - window function
+### Analyse 3 - window function 
 
-- Question : [...]
+- Question : Quels sont les 3 départements les plus accidentogènes de France pour chaque mois de l'année ?
 - Code clé :
 ```python
-[...]
+window_spec = Window.partitionBy("mois").orderBy(F.desc("total_accidents"))
+
+analyse_3 = df_dep_monthly.withColumn("rang", F.dense_rank().over(window_spec)) \
+    .filter(F.col("rang") <= 3) \
+    .orderBy("mois", "rang")
 ```
 - Résultat (extrait) :
 ```
-[...]
++----+---+---------------+----+
+|mois|dep|total_accidents|rang|
++----+---+---------------+----+
+|   1| 75|            353|   1|
+|   1| 92|            201|   2|
+|   1| 93|            194|   3|
+|   2| 75|            318|   1|
+|   2| 92|            189|   2|
+|   2| 93|            186|   3|
+|   3| 75|            384|   1|
+|   3| 92|            216|   2|
+|   3| 93|            208|   3|
++----+---+---------------+----+
 ```
-- Lecture métier : [...]
-
+- Lecture métier : Paris (département 75) est systématiquement le département le plus accidentogène de France pour chaque mois de l'année (ex: 353 accidents en Janvier, 428 en Mai). Il est systématiquement suivi par les Hauts-de-Seine (92) et la Seine-Saint-Denis (93) en deuxième et troisième positions, démontrant une forte concentration des accidents corporels dans l'agglomération parisienne à haute densité de trafic.
+```
 ---
 
 ## 4. Optimisation
