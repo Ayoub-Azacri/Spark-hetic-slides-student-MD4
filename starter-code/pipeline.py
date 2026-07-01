@@ -287,8 +287,22 @@ def transformation_et_analyses(spark):
         .orderBy(F.desc("taux_gravite_pct"))
 
     # --- Analyse 3 : window function  ------------------------------
-    # (Temporaire : Placeholder pour permettre de tester le code)
-    analyse_3 = df_caract.limit(5)
+    # Question : Top 3 des départements les plus accidentogènes pour chaque mois
+    from pyspark.sql.window import Window
+    
+    # Agrégation par mois et département
+    df_dep_monthly = df_caract.filter(F.col("dep").isNotNull() & F.col("mois").isNotNull()) \
+        .groupBy("mois", "dep") \
+        .agg(F.count_distinct("Num_Acc").alias("total_accidents"))
+
+    
+    # Définition de la fenêtre ordonnée par nombre d'accidents décroissant
+    window_spec = Window.partitionBy("mois").orderBy(F.desc("total_accidents"))
+    
+    # Classement
+    analyse_3 = df_dep_monthly.withColumn("rang", F.dense_rank().over(window_spec)) \
+        .filter(F.col("rang") <= 3) \
+        .orderBy("mois", "rang")
 
     return {"gravite_meteo": analyse_1, "gravite_vehicule": analyse_2, "top_dep_par_mois": analyse_3}
 
