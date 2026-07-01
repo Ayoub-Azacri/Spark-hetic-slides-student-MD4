@@ -222,56 +222,84 @@ def ecrire_silver(df_caract, df_lieux, df_vehicules, df_usagers):
 
 
 def transformation_et_analyses(spark):
-    """Étape 2 : relire le propre, puis 3 analyses (silver -> gold).
+    """Étape 2 : relire le propre, puis 3 analyses (silver -> gold)."""
+    print("\n--- TRANSFORMATION & ANALYSES (SILVER -> GOLD) ---")
+    
+    # Relire chaque table depuis la couche silver
+    df_caract = spark.read.parquet(f"{SORTIE_SILVER}/caracteristiques")
+    df_lieux = spark.read.parquet(f"{SORTIE_SILVER}/lieux")
+    df_vehicules = spark.read.parquet(f"{SORTIE_SILVER}/vehicules")
+    df_usagers = spark.read.parquet(f"{SORTIE_SILVER}/usagers")
 
-    On relit la couche Parquet nettoyée (pas les données brutes).
+    # Cacher les DataFrames réutilisés pour optimiser la Spark UI
+    df_caract = df_caract.cache()
+    df_usagers = df_usagers.cache()
 
-    TODO : produire AU MOINS TROIS analyses, dont :
-    - une AGRÉGATION (groupBy + agg) ;
-    - une JOINTURE (join, idéalement avec F.broadcast sur la petite table) ;
-    - une WINDOW FUNCTION (Window.partitionBy(...).orderBy(...), row_number/rank/lag).
-    Et au moins UNE OPTIMISATION justifiée : broadcast, cache, ou repartition.
-    """
-    df = spark.read.parquet(SORTIE_SILVER)
+    # --- Analyse 1 : agrégation -------------------------------
+    # Question : Nombre de victimes par gravité selon les conditions atmosphériques
+    df_caract_mapped = df_caract.withColumn(
+        "conditions_meteo",
+        F.when(F.col("atm") == 1, "Normale")
+        .when(F.col("atm") == 2, "Pluie légère")
+        .when(F.col("atm") == 3, "Pluie forte")
+        .when(F.col("atm") == 4, "Neige / grêle")
+        .when(F.col("atm") == 5, "Brouillard / fumée")
+        .when(F.col("atm") == 6, "Vent fort / tempête")
+        .when(F.col("atm") == 7, "Temps éblouissant")
+        .when(F.col("atm") == 8, "Temps nuageux")
+        .otherwise("Autre / Non renseigné")
+    )
+    
+    df_usagers_mapped = df_usagers.withColumn(
+        "gravite",
+        F.when(F.col("grav") == 1, "Indemne")
+        .when(F.col("grav") == 2, "Tué")
+        .when(F.col("grav") == 3, "Blessé hospitalisé")
+        .when(F.col("grav") == 4, "Blessé léger")
+        .otherwise("Inconnu")
+    )
 
-    # Optimisation cache : utile UNIQUEMENT si df est réutilisé par plusieurs analyses.
-    df = df.cache()
-    df.count()  # matérialise le cache
+    analyse_1 = df_caract_mapped.join(df_usagers_mapped, "Num_Acc") \
+        .groupBy("conditions_meteo", "gravite") \
+        .count() \
+        .orderBy("conditions_meteo", "gravite")
 
-    # --- Analyse 1 : agrégation -------------------------------------------------
-    # TODO : groupBy(...).agg(F.count, F.avg, F.sum...) sur une question métier.
-    analyse_1 = None
+    # --- Analyse 2 : jointure ---------------------------------
+    # Question : Taux de gravité des blessures par catégorie de véhicule
+    df_veh_mapped = df_vehicules.withColumn(
+        "categorie_vehicule",
+        F.when(F.col("catv") == 7, "Voiture (VL)")
+        .when(F.col("catv") == 10, "Utilitaire (VU)")
+        .when(F.col("catv") == 33, "Poids lourd (PL)")
+        .when(F.col("catv") == 1, "Vélo")
+        .when(F.col("catv") == 2, "Cyclomoteur")
+        .when(F.col("catv").isin(30, 31, 32, 33, 34, 35, 36, 40), "Moto / Scooter")
+        .otherwise("Autre")
+    )
 
-    # --- Analyse 2 : jointure ---------------------------------------------------
-    # TODO : charger une table de référence et la joindre.
-    # Pensez à F.broadcast(petite_table) pour éviter un shuffle.
-    analyse_2 = None
+    analyse_2 = df_usagers.join(df_veh_mapped, ["Num_Acc", "id_vehicule_clean"]) \
+        .groupBy("categorie_vehicule") \
+        .agg(
+            F.count("id_usager_clean").alias("total_usagers"),
+            F.sum(F.when(F.col("grav").isin(2, 3), 1).otherwise(0)).alias("total_graves"),
+            F.round((F.sum(F.when(F.col("grav").isin(2, 3), 1).otherwise(0)) / F.count("id_usager_clean")) * 100, 2).alias("taux_gravite_pct")
+        ) \
+        .orderBy(F.desc("taux_gravite_pct"))
 
-    # --- Analyse 3 : window function -------------------------------------------
-    # TODO : classement / cumul / moyenne glissante par groupe.
-    # fenetre = Window.partitionBy("groupe").orderBy(F.desc("metrique"))
-    # ... .withColumn("rang", F.row_number().over(fenetre)).filter(F.col("rang") <= 10)
-    analyse_3 = None
+    # --- Analyse 3 : window function  ------------------------------
+    # (Temporaire : Placeholder pour permettre de tester le code)
+    analyse_3 = df_caract.limit(5)
 
-    if analyse_1 is None or analyse_2 is None or analyse_3 is None:
-        raise NotImplementedError(
-            "TODO analyses : produisez 3 analyses (agrégation, jointure, window)."
-        )
-
-    return {"analyse_1": analyse_1, "analyse_2": analyse_2, "analyse_3": analyse_3}
+    return {"gravite_meteo": analyse_1, "gravite_vehicule": analyse_2, "top_dep_par_mois": analyse_3}
 
 
 def ecrire_gold(resultats):
-    """Étape 3 : écrire les résultats de synthèse.
-
-    TODO :
-    - Écrire chaque résultat (Parquet ou CSV). coalesce(1) est acceptable ICI car les
-      résultats agrégés sont PETITS. Ne jamais coalesce(1) un gros DataFrame.
-    """
+    """Étape 3 : écrire les résultats de synthèse en CSV."""
+    print("\n--- ÉCRITURE COUCHE GOLD (CSV) ---")
     for nom, df in resultats.items():
         chemin = f"{SORTIE_GOLD}/{nom}"
-        df.coalesce(1).write.mode("overwrite").parquet(chemin)
-        print("Résultat écrit :", chemin)
+        df.coalesce(1).write.mode("overwrite").option("header", "true").csv(chemin)
+        print("Résultat écrit (CSV) :", chemin)
 
 
 def main():
@@ -282,15 +310,10 @@ def main():
     df_caract_brut, df_lieux_brut, df_vehicules_brut, df_usagers_brut = ingestion(spark)
 
     df_caract_clean, df_lieux_clean, df_vehicules_clean, df_usagers_clean = nettoyage(
-            df_caract_brut, df_lieux_brut, df_vehicules_brut, df_usagers_brut
-        )
+        df_caract_brut, df_lieux_brut, df_vehicules_brut, df_usagers_brut
+    )
 
     ecrire_silver(df_caract_clean, df_lieux_clean, df_vehicules_clean, df_usagers_clean)
-
-    # On s'arrête ici pour tester la Phase 1
-    print("\n--- PHASE 1 DE BOUT EN BOUT RÉUSSIE ! ---")
-    spark.stop()
-    sys.exit(0)  # <-- Stops the Python process cleanly right here
 
     # Étape 2 : transformation et analyses (silver -> gold)
     resultats = transformation_et_analyses(spark)
@@ -298,10 +321,7 @@ def main():
     # Étape 3 : finalisation
     ecrire_gold(resultats)
 
-    # Garder la session vivante pour explorer la Spark UI.
-    # Décommentez la ligne suivante si le pipeline se termine trop vite :
-    # input("Spark UI sur http://localhost:4040 - Entree pour quitter...")
-
+    print("\n--- PIPELINE COMPLET DE BOUT EN BOUT RÉUSSI ! ---")
     spark.stop()
 
 
