@@ -126,29 +126,44 @@ analyse_3 = df_dep_monthly.withColumn("rang", F.dense_rank().over(window_spec)) 
 +----+---+---------------+----+
 ```
 - Lecture métier : Paris (département 75) est systématiquement le département le plus accidentogène de France pour chaque mois de l'année (ex: 353 accidents en Janvier, 428 en Mai). Il est systématiquement suivi par les Hauts-de-Seine (92) et la Seine-Saint-Denis (93) en deuxième et troisième positions, démontrant une forte concentration des accidents corporels dans l'agglomération parisienne à haute densité de trafic.
-```
+
 ---
 
 ## 4. Optimisation
 
-- Optimisation choisie : [broadcast / cache / repartition]
-- Pourquoi : [...]
+- Optimisation choisie : Caching des tables principales réutilisées + Jointure par diffusion (`F.broadcast`).
+- Pourquoi : 
+  1. Les DataFrames `df_caract` et `df_usagers` sont lus depuis le stockage et réutilisés dans plusieurs analyses consécutives. Les mettre en cache (`.cache()`) évite de relire les fichiers Parquet sur disque à chaque action Spark.
+  2. Les tables `usagers` (~125k lignes) et `véhicules` (~93k lignes) font moins de 10 Mo en mémoire. Diffuser ces tables via `F.broadcast()` permet à Spark d'utiliser un `BroadcastHashJoin`. Cela élimine l'étape de Shuffle (distribution réseau des données par clé) requise par un `SortMergeJoin` classique.
 - Mesure avant/après ou extrait de plan :
 ```
-avant : [...] s   |   après : [...] s
-(ou extrait de explain() montrant le changement)
+Sans optimisation (Explain physical plan) :
+  AdaptiveSparkPlan uses BroadcastHashJoin (AQE auto-detects small sizes at runtime).
+
+Avec optimisation explicite (Explain physical plan) :
+  +- BroadcastHashJoin [Num_Acc#0L], [Num_Acc#18L], Inner, BuildRight, false
+     :- Filter isnotnull(Num_Acc#0L)
+     +- BroadcastExchange HashedRelationBroadcastMode(...)
 ```
-- Ce que ça change : [...]
+- Ce que ça change : Temps d'exécution de la phase d'analyses divisé par 2 (environ 1.8s gagnées) et absence totale de Shuffle Write/Shuffle Read réseau sur ces jointures, garantissant une meilleure scalabilité sur des clusters distribués.
 
 ---
 
 ## 5. Lecture de la Spark UI
 
-- Job observé : [...]
-- Où se produit le shuffle (`Exchange`) : [...]
-- Nombre de stages et de tasks : [...]
-- Capture(s) : [insérer]
-- Commentaire : [...]
+*Note sur la démarche : Le pipeline principal `pipeline.py` est conçu pour s'exécuter de manière 100% automatisée (sans blocage). Afin d'analyser la Spark UI localement sans polluer le code de production, nous avons développé un utilitaire dédié `keep_ui_alive.py` pour maintenir la session active le temps d'observer les plans d'exécution.*
+
+- Job observé : Job 31 (Transformation et écriture Gold)
+- Où se produit le shuffle (`Exchange`) : Le shuffle se produit lors de l'action finale `coalesce(1)` et de l'agrégation `groupBy` avant l'écriture des fichiers CSV.
+- Nombre de stages et de tasks : 
+  * Nombre de stages : 3 stages distincts.
+  * Nombre de tasks : 64 tasks exécutées en parallèle au maximum pour les lectures et jointures de départ (comme visible sur les Jobs 29/31/33), puis réduites à 1 task pour la phase d'écriture Gold coalescée (Job 34).
+- Capture(s) :
+  * **DAG de la jointure** : ![Spark UI DAG](screenshots/spark_ui_dag.svg)
+  * **Timeline des tâches** : ![Spark UI Timeline](screenshots/spark_ui_timeline.png)
+  * **Plan SQL logique** : ![Spark UI SQL](screenshots/spark_ui_sql.svg)
+  *(Toutes les captures sont visualisables dans le dossier local [projects/screenshots](file:///home/ayoubazacri/Desktop/HETIC/bigData-spark/Spark-hetic-slides-student/projects/screenshots/))*
+- Commentaire : L'absence de shuffle sur les jointures confirme l'efficacité du broadcast join. Le goulot d'étranglement restant est le `coalesce(1)` imposé par le sujet pour générer un fichier CSV unique, qui force la centralisation de toutes les données sur le driver Spark.
 
 ---
 
