@@ -259,7 +259,8 @@ def transformation_et_analyses(spark):
         .otherwise("Inconnu")
     )
 
-    analyse_1 = df_caract_mapped.join(df_usagers_mapped, "Num_Acc") \
+    # Optimisation : Broadcast join sur la table usagers
+    analyse_1 = df_caract_mapped.join(F.broadcast(df_usagers_mapped), "Num_Acc") \
         .groupBy("conditions_meteo", "gravite") \
         .count() \
         .orderBy("conditions_meteo", "gravite")
@@ -277,7 +278,8 @@ def transformation_et_analyses(spark):
         .otherwise("Autre")
     )
 
-    analyse_2 = df_usagers.join(df_veh_mapped, ["Num_Acc", "id_vehicule_clean"]) \
+    # Optimisation : Broadcast join sur la table véhicules 
+    analyse_2 = df_usagers.join(F.broadcast(df_veh_mapped), ["Num_Acc", "id_vehicule_clean"]) \
         .groupBy("categorie_vehicule") \
         .agg(
             F.count("id_usager_clean").alias("total_usagers"),
