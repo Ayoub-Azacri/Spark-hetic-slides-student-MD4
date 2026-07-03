@@ -90,7 +90,38 @@ print(f"[-] Lecture   -> JSON: {read_times['json']:.2f}s | PARQUET: {read_times[
 # =========================================================================
 # 2. EXPLORATION YOUSSEF EL HAJJI : Impact du Caching (Cache vs No-Cache)
 # =========================================================================
-# TODO: Youssef EL HAJJI code goes here
+print("\n>>> 2. EXPLORATION YOUSSEF EL HAJJI : IMPACT DU CACHING (CACHE vs NO-CACHE)")
+
+# Requête répétitive sans cache
+print("[-] Exécution 3 fois SANS cache :")
+no_cache_times = []
+for i in range(3):
+    start = time.time()
+    # On force la relecture complète des fichiers sources
+    c_nc = spark.read.parquet(f"{SILVER_DIR}/caracteristiques")
+    u_nc = spark.read.parquet(f"{SILVER_DIR}/usagers")
+    res = c_nc.join(u_nc, "Num_Acc").groupBy("dep").count()
+    res.count()
+    no_cache_times.append(time.time() - start)
+    print(f"    Run {i+1} : {no_cache_times[-1]:.3f}s")
+
+# Requête répétitive avec cache
+print("[-] Exécution 3 fois AVEC cache :")
+cache_times = []
+c_c = spark.read.parquet(f"{SILVER_DIR}/caracteristiques").cache()
+u_c = spark.read.parquet(f"{SILVER_DIR}/usagers").cache()
+
+# Le premier run va charger le cache (donc un peu plus long)
+for i in range(3):
+    start = time.time()
+    res = c_c.join(u_c, "Num_Acc").groupBy("dep").count()
+    res.count()
+    cache_times.append(time.time() - start)
+    print(f"    Run {i+1} : {cache_times[-1]:.3f}s")
+
+# Libération du cache
+c_c.unpersist()
+u_c.unpersist()
 
 
 # =========================================================================

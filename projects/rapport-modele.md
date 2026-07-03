@@ -205,19 +205,22 @@ Format JSON : lu + agrégé en 5.30 secondes.
 - **Protocole** :
   * Exécuter la même requête de jointure + regroupement 3 fois de suite sans cache (en forçant la relecture des fichiers sur disque).
   * Exécuter la même requête 3 fois de suite en mettant en cache les DataFrames `caracteristiques` et `usagers` de départ.
-- **Mesures** : *(À remplir par Youssef EL HAJJI après exécution du script)*
+- **Mesures** :
 ```
 === EXÉCUTION SANS CACHE ===
-- Run 1 : [À remplir] s
-- Run 2 : [À remplir] s
-- Run 3 : [À remplir] s
+- Run 1 : 2.114 s
+- Run 2 : 1.855 s
+- Run 3 : 1.738 s
 
 === EXÉCUTION AVEC CACHE ===
-- Run 1 (Chargement du cache) : [À remplir] s
-- Run 2 (Utilisation du cache) : [À remplir] s
-- Run 3 (Utilisation du cache) : [À remplir] s
+- Run 1 (Chargement du cache) : 2.228 s
+- Run 2 (Utilisation du cache) : 0.559 s
+- Run 3 (Utilisation du cache) : 0.555 s
 ```
-- **Conclusion (Synthèse en 3 phrases)** : *(À compléter par Youssef EL HAJJI: 1. Ce qui a été testé, 2. Ce qui a été mesuré, 3. Ce qui est conclu)*
+- **Conclusion (Synthèse en 3 phrases)** :
+  1. *Ce qui a été testé* : Nous avons mesuré l'impact de la mise en cache mémoire (`.cache()`) de deux DataFrames réutilisés sur les temps d'exécution de requêtes successives par rapport à une lecture disque systématique.
+  2. *Ce qui a été mesuré* : Sans cache, les trois exécutions prennent un temps similaire (entre 1.73s et 2.11s) alors qu'avec cache, le Run 1 charge la mémoire (2.228s) et les runs suivants descendent à 0.559s et 0.555s.
+  3. *Ce qui est conclu* : La mise en cache mémoire permet de diviser le temps de requêtage par plus de 3 (environ 3.3x) lors de requêtes répétées, mais elle implique un léger surcoût lors du chargement initial (Run 1) et une occupation de la mémoire vive qu'il convient d'arbitrer.
 
 ---
 
@@ -242,9 +245,7 @@ Format JSON : lu + agrégé en 5.30 secondes.
   1. *Ce qui a été testé* : Nous avons comparé l'effet de filtrage direct en lecture (Predicate Pushdown) entre Parquet (qui le supporte nativement dans ses métadonnées) et le CSV sur le département `75`.
   2. *Ce qui a été mesuré* : Le filtrage sur Parquet s'est exécuté en 0.126s (avec la présence de `PushedFilters: [IsNotNull(dep), EqualTo(dep,75)]` dans le plan d'exécution physique) contre 0.158s sur CSV.
   3. *Ce qui est conclu* : Le Predicate Pushdown permet d'éviter le chargement inutile de lignes en mémoire en filtrant directement au niveau stockage physique, ce qui rend le requêtage sur Parquet drastiquement plus rapide que sur un format brut comme le CSV.
-```
 
----
 ---
 
 ### 6.4 Exploration Ayoub AZACRI : Repartition vs Coalesce (Gestion des partitions)
