@@ -43,7 +43,7 @@ brut (bronze)  ->  nettoyage (silver, Parquet)  ->  agrégé (gold)
 ---
 
 ## 3. Analyses
-### Analyse 1 - agrégation 
+### Analyse 1 - agrégation
 
 - Question : Quelle est la répartition de la gravité des blessures des victimes selon les conditions atmosphériques ?
 - Code clé :
@@ -71,7 +71,7 @@ Pluie forte,Tué,100
 ```
 - Lecture métier : Contre-intuitivement, l'immense majorité des accidents corporels (et des décès, soit plus de 70%) a lieu par temps météo "Normal". Cela s'explique par le fait que les conducteurs sont moins vigilants et roulent plus vite lorsque les conditions sont optimales. La pluie légère représente le second facteur météo le plus accidentogène avec 345 tués.
 
-### Analyse 2 - jointure 
+### Analyse 2 - jointure
 
 - Question : Quel est le taux de gravité (pourcentage d'accidents mortels et hospitalisés) selon la catégorie du véhicule impliqué ?
 - Code clé :
@@ -98,7 +98,7 @@ Utilitaire (VU),8975,990,11.03
 - Lecture métier : Les accidents impliquant des Poids Lourds (PL) présentent le taux de gravité le plus élevé (41.90% de tués ou hospitalisés), en raison de leur masse et de l'énergie cinétique du choc. De même, les usagers de deux-roues (Cyclomoteurs à 37.73%, Vélos à 26.42% et Motos à 26.13%) subissent des blessures très graves à cause de leur absence de carrosserie protectrice, contrairement aux Voitures (VL) à 14.31%.
 
 
-### Analyse 3 - window function 
+### Analyse 3 - window function
 
 - Question : Quels sont les 3 départements les plus accidentogènes de France pour chaque mois de l'année ?
 - Code clé :
@@ -132,8 +132,8 @@ analyse_3 = df_dep_monthly.withColumn("rang", F.dense_rank().over(window_spec)) 
 ## 4. Optimisation
 
 - Optimisation choisie : Caching des tables principales réutilisées + Jointure par diffusion (`F.broadcast`).
-- Pourquoi : 
-  1. Les DataFrames `df_caract` et `df_usagers` sont lus depuis le stockage et réutilisés dans plusieurs analyses consécutives. Les mettre en cache (`.cache()`) évite de relire les fichiers Parquet sur disque à chaque action Spark.
+- Pourquoi :
+  1. Les DataFrames `df_caract`  et `df_usagers` sont lus depuis le stockage et réutilisés dans plusieurs analyses consécutives. Les mettre en cache (`.cache()`) évite de relire les fichiers Parquet sur disque à chaque action Spark.
   2. Les tables `usagers` (~125k lignes) et `véhicules` (~93k lignes) font moins de 10 Mo en mémoire. Diffuser ces tables via `F.broadcast()` permet à Spark d'utiliser un `BroadcastHashJoin`. Cela élimine l'étape de Shuffle (distribution réseau des données par clé) requise par un `SortMergeJoin` classique.
 - Mesure avant/après ou extrait de plan :
 ```
@@ -155,7 +155,7 @@ Avec optimisation explicite (Explain physical plan) :
 
 - Job observé : Job 31 (Transformation et écriture Gold)
 - Où se produit le shuffle (`Exchange`) : Le shuffle se produit lors de l'action finale `coalesce(1)` et de l'agrégation `groupBy` avant l'écriture des fichiers CSV.
-- Nombre de stages et de tasks : 
+- Nombre de stages et de tasks :
   * Nombre de stages : 3 stages distincts.
   * Nombre de tasks : 64 tasks exécutées en parallèle au maximum pour les lectures et jointures de départ (comme visible sur les Jobs 29/31/33), puis réduites à 1 task pour la phase d'écriture Gold coalescée (Job 34).
 - Capture(s) :
@@ -169,20 +169,104 @@ Avec optimisation explicite (Explain physical plan) :
 
 ## 6. Exploration au-delà du cours
 
-- Piste choisie : [AQE et partitions / skew et salting / UDF vs pandas_udf / table gérée et upsert /
-  spark-submit / pushdown mesuré / benchmark formats / streaming ou MLlib]
-- Question : [...]
-- Protocole (ce qu'on a fait varier, ce qui reste fixe) : [...]
-- Mesures :
+### 6.1 Exploration Ayoub AZACRI : Benchmark de formats de stockage (CSV vs Parquet vs JSON)
+
+- **Question** : Quel format de stockage offre le meilleur compromis en termes de vitesse d'écriture, d'espace disque et de performances de requêtage dans Spark ?
+- **Protocole** :
+  * Écriture et re-lecture des tables nettoyées (caractéristiques, usagers) dans 3 formats distincts : CSV, Parquet et JSON.
+  * Mesure du temps d'écriture, de la taille sur disque, et d'une requête de jointure/regroupement complexe.
+- **Mesures** :
 ```
-[...]
+=== 1. TEMPS D'ÉCRITURE ===
+Format JSON : écrit en 6.00 secondes.
+Format PARQUET : écrit en 5.94 secondes.
+Format CSV : écrit en 10.11 secondes.
+
+=== 2. COMPRESSION SUR DISQUE ===
+Format PARQUET : 6.31 Mo (Taux de compression maximal)
+Format CSV : 19.17 Mo
+Format JSON : 46.42 Mo (Très verbeux)
+
+=== 3. LECTURE & AGRÉGATION ===
+Format PARQUET : lu + agrégé en 1.09 secondes.
+Format CSV : lu + agrégé en 5.06 secondes.
+Format JSON : lu + agrégé en 5.30 secondes.
 ```
-- Conclusion (même si négative ou contre-intuitive) : [...]
+- **Conclusion (Synthèse en 3 phrases)** :
+  1. *Ce qui a été testé* : Nous avons comparé l'impact de trois formats de stockage (CSV, Parquet, JSON) sur les temps d'écriture, l'espace disque consommé et les performances de requêtage de jointure/regroupement dans Spark.
+  2. *Ce qui a été mesuré* : Le format Parquet s'est révélé être le plus compact sur disque (6.31 Mo) et le plus rapide à requêter en lecture (1.09s), tandis que le JSON et le Parquet ont offert les meilleurs temps d'écriture brute (respectivement 6.00s et 5.94s) et le CSV s'est montré le plus lent dans toutes les dimensions.
+  3. *Ce qui est conclu* : Parquet est le format analytique optimal grâce à son stockage colonnaire et sa compression par défaut, tandis que le JSON brut doit être réservé à l'ingestion rapide de flux de données.
+
+---
+
+### 6.2 Exploration Youssef EL HAJJI : Impact du Caching (Cache vs No-Cache)
+
+- **Question** : Quel est le gain de performance réel lorsqu'on met en cache (`.cache()`) les tables nettoyées réutilisées dans plusieurs requêtes consécutives ?
+- **Protocole** :
+  * Exécuter la même requête de jointure + regroupement 3 fois de suite sans cache (en forçant la relecture des fichiers sur disque).
+  * Exécuter la même requête 3 fois de suite en mettant en cache les DataFrames `caracteristiques` et `usagers` de départ.
+- **Mesures** : *(À remplir par Youssef EL HAJJI après exécution du script)*
+```
+=== EXÉCUTION SANS CACHE ===
+- Run 1 : [À remplir] s
+- Run 2 : [À remplir] s
+- Run 3 : [À remplir] s
+
+=== EXÉCUTION AVEC CACHE ===
+- Run 1 (Chargement du cache) : [À remplir] s
+- Run 2 (Utilisation du cache) : [À remplir] s
+- Run 3 (Utilisation du cache) : [À remplir] s
+```
+- **Conclusion (Synthèse en 3 phrases)** : *(À compléter par Youssef EL HAJJI: 1. Ce qui a été testé, 2. Ce qui a été mesuré, 3. Ce qui est conclu)*
+
+---
+
+### 6.3 Exploration Omar HAKIK : Predicate Pushdown (Filtre au niveau stockage)
+
+- **Question** : Spark applique-t-il des optimisations de filtrage directement lors de la lecture des fichiers physiques (Predicate Pushdown), et quelle est la différence de performance par rapport à un fichier CSV ?
+- **Protocole** :
+  * Filtrer le jeu de données pour ne conserver que le département `75` (Paris) sur la table des caractéristiques.
+  * Comparer le temps de réponse entre Parquet et CSV, et vérifier le plan d'exécution physique (`.explain()`) pour identifier le mot-clé `PushedFilters`.
+- **Mesures** : *(À remplir par Omar HAKIK après exécution du script)*
+```
+- Temps de requête filtrée sur Parquet (Pushdown actif)  : [À remplir] s
+- Temps de requête filtrée sur CSV (Pas de pushdown brut) : [À remplir] s
+
+- Extrait du plan physique (PushedFilters de Parquet) :
+[À copier-coller depuis la console]
+```
+- **Conclusion (Synthèse en 3 phrases)** : *(À compléter par Omar HAKIK: 1. Ce qui a été testé, 2. Ce qui a été mesuré, 3. Ce qui est conclu)*
+
+---
+
+### 6.4 Exploration Ayoub AZACRI : Repartition vs Coalesce (Gestion des partitions)
+
+- **Question** : Quelle est la différence d'efficacité et de coût réseau (shuffle) entre le repartitionnement complet (`.repartition()`) et la réduction de partitions locale (`.coalesce()`) ?
+- **Protocole** :
+  * Prendre le DataFrame `caracteristiques` de départ (partitionné par défaut).
+  * Mesurer le temps d'exécution pour réduire le partitionnement à 4 partitions en utilisant d'abord `.repartition(4)` (provoquant un Shuffle), puis `.coalesce(4)` (sans Shuffle).
+- **Mesures** :
+```
+- Nombre de partitions initiales : 17
+- Temps d'exécution avec .repartition(4) (avec Shuffle)  : 1.178 s
+- Temps d'exécution avec .coalesce(4) (sans Shuffle)    : 0.986 s
+```
+- **Conclusion (Synthèse en 3 phrases)** :
+  1. *Ce qui a été testé* : Nous avons comparé l'impact réseau et les performances de la redistribution complète (`.repartition(4)`) par rapport à la fusion locale de partitions (`.coalesce(4)`) pour réduire un DataFrame de 17 à 4 partitions.
+  2. *Ce qui a été mesuré* : L'opération `.coalesce(4)` s'est révélée plus rapide (0.986s) que `.repartition(4)` (1.178s), car cette dernière provoque un réalignement complet (shuffle) des données à travers le réseau.
+  3. *Ce qui est conclu* : `.coalesce()` est l'approche optimale pour réduire le nombre de partitions sans induire de coût de transfert réseau, tandis que `.repartition()` doit être réservé aux cas nécessitant un rééquilibrage uniforme des partitions ou une augmentation de leur nombre.
 
 ---
 
 ## 7. Ce qu'on a appris et limites
 
-- Ce qui a marché : [...]
-- Ce qui a bloqué : [...]
-- Ce qu'on ferait avec plus de temps : [...]
+- Ce qui a marché :
+  * Le nettoyage complet et le typage rigoureux des données géographiques (latitude/longitude) et temporelles (dates) ont permis d'éliminer les lignes erronées.
+  * La mise en cache des tables réutilisées et le broadcast des petites tables ont permis d'atteindre des temps d'exécution sous la barre de la seconde pour les analyses Gold.
+  * Le benchmark a clairement démontré la supériorité du format Parquet pour les requêtes analytiques.
+- Ce qui a bloqué :
+  * Les limitations de Windows qui requièrent l'installation de `winutils.exe` et `hadoop.dll` pour écrire des fichiers Parquet locaux.
+  * La contrainte du `coalesce(1)` qui bride la distribution de Spark au moment d'écrire le résultat final.
+- Ce qu'on ferait avec plus de temps :
+  * Mettre en place un outil de visualisation (comme Superset ou Streamlit) branché directement sur les fichiers Gold pour afficher les départements les plus accidentogènes sur une carte interactive.
+  * Tester le comportement de Spark sur un cluster distribué réel (AWS EMR ou Databricks) avec des volumes de données 100x supérieurs.
