@@ -1,0 +1,37 @@
+conditions_meteo,gravite,count
+Autre / Non renseigné,Blessé hospitalisé,110
+Autre / Non renseigné,Blessé léger,198
+Autre / Non renseigné,Indemne,155
+Autre / Non renseigné,Tué,19
+Brouillard / fumée,Blessé hospitalisé,131
+Brouillard / fumée,Blessé léger,171
+Brouillard / fumée,Indemne,173
+Brouillard / fumée,Tué,33
+Neige / grêle,Blessé hospitalisé,57
+Neige / grêle,Blessé léger,100
+Neige / grêle,Indemne,130
+Neige / grêle,Tué,8
+Normale,Blessé hospitalisé,15197
+Normale,Blessé léger,38611
+Normale,Indemne,41931
+Normale,Tué,2633
+Pluie forte,Blessé hospitalisé,536
+Pluie forte,Blessé léger,1353
+Pluie forte,Indemne,1446
+Pluie forte,Tué,100
+Pluie légère,Blessé hospitalisé,1967
+Pluie légère,Blessé léger,6350
+Pluie légère,Indemne,6293
+Pluie légère,Tué,345
+Temps nuageux,Blessé hospitalisé,704
+Temps nuageux,Blessé léger,1999
+Temps nuageux,Indemne,2151
+Temps nuageux,Tué,159
+Temps éblouissant,Blessé hospitalisé,483
+Temps éblouissant,Blessé léger,668
+Temps éblouissant,Indemne,945
+Temps éblouissant,Tué,83
+Vent fort / tempête,Blessé hospitalisé,86
+Vent fort / tempête,Blessé léger,153
+Vent fort / tempête,Indemne,175
+Vent fort / tempête,Tué,18
