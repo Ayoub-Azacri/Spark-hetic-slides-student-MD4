@@ -96,7 +96,24 @@ print(f"[-] Lecture   -> JSON: {read_times['json']:.2f}s | PARQUET: {read_times[
 # =========================================================================
 # 3. EXPLORATION OMAR HAKIK : Predicate Pushdown (Filtre au niveau stockage)
 # =========================================================================
-# TODO: Omar HAKIK code goes here
+print("\n>>> 3. EXPLORATION OMAR : PREDICATE PUSHDOWN (PARQUET vs CSV)")
+
+# Requête filtrée sur Parquet (avec Predicate Pushdown)
+start = time.time()
+c_parquet = spark.read.parquet(f"{BENCHMARK_DIR}/parquet/caracteristiques")
+res_parquet = c_parquet.filter(F.col("dep") == "75").count()
+parquet_filter_time = time.time() - start
+
+# Requête filtrée sur CSV (sans Predicate Pushdown brut)
+start = time.time()
+c_csv = spark.read.option("header", "true").csv(f"{BENCHMARK_DIR}/csv/caracteristiques")
+res_csv = c_csv.filter(F.col("dep") == "75").count()
+csv_filter_time = time.time() - start
+
+print(f"[-] Temps avec filtre sur Parquet (Pushdown actif)  : {parquet_filter_time:.3f}s")
+print(f"[-] Temps avec filtre sur CSV (Pas de pushdown brut) : {csv_filter_time:.3f}s")
+print("[-] Plan d'exécution Parquet (Extrait) :")
+c_parquet.filter(F.col("dep") == "75").explain()
 
 
 # =========================================================================
