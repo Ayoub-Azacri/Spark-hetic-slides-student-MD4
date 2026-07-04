@@ -6,9 +6,13 @@ from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, LongType, IntegerType, StringType
 import pyspark.sql.functions as F
 
-# Configuration des répertoires de streaming
-STREAMING_DIR = "data/streaming_input"
-CHECKPOINT_DIR = "data/streaming_checkpoint"
+# Configuration dynamique des répertoires de streaming
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+
+STREAMING_DIR = os.path.join(PROJECT_ROOT, "data", "streaming_input")
+CHECKPOINT_DIR = os.path.join(PROJECT_ROOT, "data", "streaming_checkpoint")
+RAW_CARACT_PATH = os.path.join(PROJECT_ROOT, "data", "datasets", "onisr-2023", "caract-2023.csv")
 
 def init_streaming_directories():
     """Réinitialise les dossiers temporaires de streaming."""
@@ -17,8 +21,6 @@ def init_streaming_directories():
         if os.path.exists(path):
             shutil.rmtree(path)
         os.makedirs(path)
-
-RAW_CARACT_PATH = "data/datasets/onisr-2023/caract-2023.csv"
 
 def stream_simulator_thread():
     """Simule l'arrivée continue de fichiers de données toutes les 6 secondes."""
