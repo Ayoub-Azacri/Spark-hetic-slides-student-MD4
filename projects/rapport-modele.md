@@ -162,7 +162,7 @@ Avec optimisation explicite (Explain physical plan) :
   * **DAG de la jointure** : ![Spark UI DAG](screenshots/spark_ui_dag.svg)
   * **Timeline des tâches** : ![Spark UI Timeline](screenshots/spark_ui_timeline.png)
   * **Plan SQL logique** : ![Spark UI SQL](screenshots/spark_ui_sql.svg)
-  *(Toutes les captures sont visualisables dans le dossier local [projects/screenshots](file:///home/ayoubazacri/Desktop/HETIC/bigData-spark/Spark-hetic-slides-student/projects/screenshots/))*
+  *(Toutes les captures sont visualisables dans le dossier local [projects/screenshots])
 - Commentaire : L'absence de shuffle sur les jointures confirme l'efficacité du broadcast join. Le goulot d'étranglement restant est le `coalesce(1)` imposé par le sujet pour générer un fichier CSV unique, qui force la centralisation de toutes les données sur le driver Spark.
 
 ---
@@ -298,7 +298,16 @@ Pour aller au-delà du socle attendu, nous avons mis en place un pipeline de tra
 
     * Les résultats triés sont affichés dans la console en mode `complete` à chaque micro-batch.
 
-    <!-- TODO (Youssef EL HAJJI) : Insère ici la capture d'écran du terminal de streaming : ![Console Streaming](file:HETIC/bigData-spark/Spark-hetic-slides-student/projects/screenshots/spark_streaming_console.png) -->
+    ##### Visualisation de l'évolution du flux en temps réel (micro-batches) :
+    
+    * **Batch 0 (Premier lot de données reçu)** :
+      ![Batch 0](screenshots/spark_streaming_batch_0.png)
+      
+    * **Batch 1 (Second lot cumulé)** :
+      ![Batch 1](screenshots/spark_streaming_batch_1.png)
+      
+    * **Batch 2 (Résultat consolidé final)** :
+      ![Batch 2](screenshots/spark_streaming_batch_2.png)
 
 - **Conclusion** : Le Structured Streaming permet d'adapter très simplement un pipeline de calcul Batch au temps réel. Spark gère de manière transparente la détection de nouveaux fichiers, le calcul incrémental et le rafraîchissement des agrégations sans surcoût de développement complexe.
 
