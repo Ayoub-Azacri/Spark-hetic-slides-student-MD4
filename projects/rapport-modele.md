@@ -162,7 +162,7 @@ Avec optimisation explicite (Explain physical plan) :
   * **DAG de la jointure** : ![Spark UI DAG](screenshots/spark_ui_dag.svg)
   * **Timeline des tâches** : ![Spark UI Timeline](screenshots/spark_ui_timeline.png)
   * **Plan SQL logique** : ![Spark UI SQL](screenshots/spark_ui_sql.svg)
-  *(Toutes les captures sont visualisables dans le dossier local [projects/screenshots](file:///home/ayoubazacri/Desktop/HETIC/bigData-spark/Spark-hetic-slides-student/projects/screenshots/))*
+  *(Toutes les captures sont visualisables dans le dossier local [projects/screenshots])
 - Commentaire : L'absence de shuffle sur les jointures confirme l'efficacité du broadcast join. Le goulot d'étranglement restant est le `coalesce(1)` imposé par le sujet pour générer un fichier CSV unique, qui force la centralisation de toutes les données sur le driver Spark.
 
 ---
@@ -279,3 +279,34 @@ Format JSON : lu + agrégé en 5.30 secondes.
 - Ce qu'on ferait avec plus de temps :
   * Mettre en place un outil de visualisation (comme Superset ou Streamlit) branché directement sur les fichiers Gold pour afficher les départements les plus accidentogènes sur une carte interactive.
   * Tester le comportement de Spark sur un cluster distribué réel (AWS EMR ou Databricks) avec des volumes de données 100x supérieurs.
+
+## 8. Bonus : Pipeline Structured Streaming en temps réel
+
+Pour aller au-delà du socle attendu, nous avons mis en place un pipeline de traitement de données en temps réel en utilisant **Spark Structured Streaming** (script : `starter-code/bonus_streaming.py`).
+
+- **Problématique métier** : Superviser en temps réel le nombre d'accidents par département au fur et à mesure que les signalements sont enregistrés par les autorités, afin de détecter au plus vite les zones à risque.
+- **Protocole et Simulation** :
+  * Le flux de données entrant est lu en continu (`readStream`) avec un schéma strict à partir du dossier `data/streaming_input/`.
+  * Un processus en arrière-plan (thread) simule l'arrivée continue de données en découpant le fichier de caractéristiques brutes en lots de 15 000 lignes, déposés toutes les 6 secondes.
+  * Spark agrège la donnée en direct :
+    ```python
+    df_counts = df_stream.groupBy("dep") \
+        .count() \
+        .orderBy(F.desc("count"))
+    ```
+  * Les résultats triés sont affichés dans la console en mode `complete` à chaque micro-batch.
+
+    ##### Visualisation de l'évolution du flux en temps réel (micro-batches) :
+    
+    * **Batch 0 (Premier lot de données reçu)** :
+      ![Batch 0](screenshots/spark_streaming_batch_0.png)
+      
+    * **Batch 1 (Second lot cumulé)** :
+      ![Batch 1](screenshots/spark_streaming_batch_1.png)
+      
+    * **Batch 2 (Résultat consolidé final)** :
+      ![Batch 2](screenshots/spark_streaming_batch_2.png)
+
+- **Conclusion** : Le Structured Streaming permet d'adapter très simplement un pipeline de calcul Batch au temps réel. Spark gère de manière transparente la détection de nouveaux fichiers, le calcul incrémental et le rafraîchissement des agrégations sans surcoût de développement complexe.
+
+
