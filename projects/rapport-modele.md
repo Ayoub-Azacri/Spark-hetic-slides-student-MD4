@@ -290,7 +290,11 @@ Pour aller au-delà du socle attendu, nous avons mis en place un pipeline de tra
   * Un processus en arrière-plan (thread) simule l'arrivée continue de données en découpant le fichier de caractéristiques brutes en lots de 15 000 lignes, déposés toutes les 6 secondes.
   * Spark agrège la donnée en direct.
 
-    <!-- TODO (Omar HAKIK) : Insère ici ton bloc de code d'agrégation (groupBy et count) -->
+  * Traitement en streaming : Nombre d'accidents cumulé par département 
+    import pyspark.sql.functions as F
+    df_counts = df_stream.groupBy("dep") \
+        .count() \
+        .orderBy(F.desc("count"))
 
     * Les résultats triés sont affichés dans la console en mode `complete` à chaque micro-batch.
 

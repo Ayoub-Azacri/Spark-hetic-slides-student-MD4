@@ -19,7 +19,7 @@ def run_streaming():
     # Initialisation des répertoires
     init_streaming_directories()
 
-    # 1. Session Spark (Ayoub AZACRI)
+    # 1. Session Spark 
     spark = SparkSession.builder \
         .appName("ONISR-Accidents-Streaming-Bonus") \
         .master("local[*]") \
@@ -31,7 +31,7 @@ def run_streaming():
     print("         BONUS : PIPELINE STRUCTURED STREAMING (ONISR)")
     print("============================================================\n")
 
-    # 2. Définition du schéma caractéristiques (Ayoub AZACRI)
+    # 2. Définition du schéma caractéristiques 
     caract_schema = StructType([
         StructField("Num_Acc", LongType(), False),
         StructField("jour", IntegerType(), True),
@@ -50,7 +50,7 @@ def run_streaming():
         StructField("long", StringType(), True)
     ])
 
-    # 3. Lecture du flux de données CSV (Ayoub AZACRI)
+    # 3. Lecture du flux de données CSV 
     print("[-] En attente de données dans : " + STREAMING_DIR)
     df_stream = spark.readStream \
         .option("header", "true") \
@@ -58,11 +58,11 @@ def run_streaming():
         .schema(caract_schema) \
         .csv(STREAMING_DIR)
 
-    # TODO (Omar HAKIK) : ÉTAPE 2 - Logique de calcul / Agrégation
-    # - Faire un groupBy par département ("dep")
-    # - Compter le nombre d'accidents ("count")
-    # - Trier par ordre décroissant de count
-    # df_counts = ...
+    # 4. Traitement en streaming : Nombre d'accidents cumulé par département 
+    import pyspark.sql.functions as F
+    df_counts = df_stream.groupBy("dep") \
+        .count() \
+        .orderBy(F.desc("count"))
 
     # TODO (Youssef EL HAJJI) : ÉTAPE 3 - Lancement du Stream & Simulateur de flux
     # - Déposer des fichiers CSV bruts de test dans data/streaming_input/
